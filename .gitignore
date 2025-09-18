@@ -16,4 +16,5 @@ Desktop.ini
 .vscode/
 .checkpoints/
 videorag-workdir/
-quickstart.sh
+quickstart-custom.sh
+sglang.sh
