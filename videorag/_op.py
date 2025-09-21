@@ -269,8 +269,7 @@ async def videorag_query(
 ) -> str:
     """结合文本分块与视觉检索，回答开放式问题。
 
-    流程包括：检索文本分块、为视觉检索改写查询、使用 LLM 过滤视频片段、
-    生成聚焦字幕，并将文本与视频证据组合成最终回答。
+    流程包括：检索文本分块、视觉检索、生成聚焦字幕，并将文本与视频证据组合成最终回答。
 
     Args:
         query: 用户问题。
@@ -322,39 +321,9 @@ async def videorag_query(
     print(query)
     print(f"Retrieved Visual Segments {visual_retrieved_segments}")
     
-    already_processed = 0
-    async def _filter_single_segment(knowledge: str, segment_key_dp: tuple[str, str]):
-        nonlocal use_model_func, already_processed
-        segment_key = segment_key_dp[0]
-        segment_content = segment_key_dp[1]
-        filter_prompt = PROMPTS["filtering_segment"]
-        filter_prompt = filter_prompt.format(caption=segment_content, knowledge=knowledge)
-        result = await use_model_func(filter_prompt)
-        already_processed += 1
-        now_ticks = PROMPTS["process_tickers"][
-            already_processed % len(PROMPTS["process_tickers"])
-        ]
-        print(
-            f"{now_ticks} Checked {already_processed} segments\r",
-            end="",
-            flush=True,
-        )
-        return (segment_key, result)
-    
-    rough_captions = {}
-    for s_id in retrieved_segments:
-        video_name = '_'.join(s_id.split('_')[:-1])
-        index = s_id.split('_')[-1]
-        rough_captions[s_id] = video_segments._data[video_name][index]["transcript"]
-    results = await asyncio.gather(
-        *[_filter_single_segment(query, (s_id, rough_captions[s_id])) for s_id in rough_captions]
-    )
-    remain_segments = [x[0] for x in results if 'yes' in x[1].lower()]
-    print(f"{len(remain_segments)} Video Segments remain after filtering")
-    if len(remain_segments) == 0:
-        print("Since no segments remain after filtering, we utilized all the retrieved segments.")
-        remain_segments = retrieved_segments
-    print(f"Remain segments {remain_segments}")
+    # 直接使用所有检索到的视频片段，不再进行LLM过滤
+    remain_segments = retrieved_segments
+    print(f"Using all {len(remain_segments)} retrieved segments")
     
     # visual retrieval
     keywords_for_caption = await _extract_keywords_query(
@@ -472,39 +441,9 @@ async def videorag_query_multiple_choice(
     print(query)
     print(f"Retrieved Visual Segments {visual_retrieved_segments}")
     
-    already_processed = 0
-    async def _filter_single_segment(knowledge: str, segment_key_dp: tuple[str, str]):
-        nonlocal use_model_func, already_processed
-        segment_key = segment_key_dp[0]
-        segment_content = segment_key_dp[1]
-        filter_prompt = PROMPTS["filtering_segment"]
-        filter_prompt = filter_prompt.format(caption=segment_content, knowledge=knowledge)
-        result = await use_model_func(filter_prompt)
-        already_processed += 1
-        now_ticks = PROMPTS["process_tickers"][
-            already_processed % len(PROMPTS["process_tickers"])
-        ]
-        print(
-            f"{now_ticks} Checked {already_processed} segments\r",
-            end="",
-            flush=True,
-        )
-        return (segment_key, result)
-    
-    rough_captions = {}
-    for s_id in retrieved_segments:
-        video_name = '_'.join(s_id.split('_')[:-1])
-        index = s_id.split('_')[-1]
-        rough_captions[s_id] = video_segments._data[video_name][index]["transcript"]
-    results = await asyncio.gather(
-        *[_filter_single_segment(query, (s_id, rough_captions[s_id])) for s_id in rough_captions]
-    )
-    remain_segments = [x[0] for x in results if 'yes' in x[1].lower()]
-    print(f"{len(remain_segments)} Video Segments remain after filtering")
-    if len(remain_segments) == 0:
-        print("Since no segments remain after filtering, we utilized all the retrieved segments.")
-        remain_segments = retrieved_segments
-    print(f"Remain segments {remain_segments}")
+    # 直接使用所有检索到的视频片段，不再进行LLM过滤
+    remain_segments = retrieved_segments
+    print(f"Using all {len(remain_segments)} retrieved segments")
     
     # visual retrieval
     keywords_for_caption = await _extract_keywords_query(

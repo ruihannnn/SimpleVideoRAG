@@ -268,25 +268,6 @@ Output:
 
 
 
-PROMPTS[
-    "filtering_segment"
-] = """---Role---
-
-You are a helpful assistant to determine whether the video may contain information relevant to the knowledge based on its rough caption.
-Please note that this is a rough caption of the video segments, which means it may not directly contain the answer but may indicate that the video segment is likely to contain information relevant to answering the question. 
-
----Video Caption---
-
-{caption}
-
----Knowledge We Need---
-
-{knowledge}
-
----Answer---
-Please provide an answer that begins with "yes" or "no," followed by a brief step-by-step explanation.
-Answer:
-"""
 
 
 
