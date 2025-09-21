@@ -214,7 +214,7 @@ def get_chunks(new_videos, chunk_func=chunking_by_video_segments, **chunk_func_p
     new_videos_list = list(new_videos.keys())
     for video_name in new_videos_list:
         segment_id_list = list(new_videos[video_name].keys())
-        docs = [new_videos[video_name][index]["content"] for index in segment_id_list]
+        docs = [new_videos[video_name][index]["transcript"] for index in segment_id_list]
         doc_keys = [f'{video_name}_{index}' for index in segment_id_list]
 
         ENCODER = tiktoken.encoding_for_model("gpt-4o")
@@ -345,7 +345,7 @@ async def videorag_query(
     for s_id in retrieved_segments:
         video_name = '_'.join(s_id.split('_')[:-1])
         index = s_id.split('_')[-1]
-        rough_captions[s_id] = video_segments._data[video_name][index]["content"]
+        rough_captions[s_id] = video_segments._data[video_name][index]["transcript"]
     results = await asyncio.gather(
         *[_filter_single_segment(query, (s_id, rough_captions[s_id])) for s_id in rough_captions]
     )
@@ -495,7 +495,7 @@ async def videorag_query_multiple_choice(
     for s_id in retrieved_segments:
         video_name = '_'.join(s_id.split('_')[:-1])
         index = s_id.split('_')[-1]
-        rough_captions[s_id] = video_segments._data[video_name][index]["content"]
+        rough_captions[s_id] = video_segments._data[video_name][index]["transcript"]
     results = await asyncio.gather(
         *[_filter_single_segment(query, (s_id, rough_captions[s_id])) for s_id in rough_captions]
     )

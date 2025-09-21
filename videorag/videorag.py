@@ -47,7 +47,6 @@ from .base import (
 from ._videoutil import(
     split_video,
     speech_to_text,
-    segment_caption,
     merge_segment_information,
     saving_video_segments,
 )
@@ -215,9 +214,8 @@ class VideoRAG:
                 self.audio_output_format
             )
             
-            # Step3: saving video segments **as well as** obtain caption with vision language model
+            # Step3: saving video segments
             manager = multiprocessing.Manager()
-            captions = manager.dict()
             error_queue = manager.Queue()
             
             process_saving_video_segments = multiprocessing.Process(
@@ -233,25 +231,10 @@ class VideoRAG:
                 )
             )
             
-            process_segment_caption = multiprocessing.Process(
-                target=segment_caption,
-                args=(
-                    video_name,
-                    video_path,
-                    segment_index2name,
-                    transcripts,
-                    segment_times_info,
-                    captions,
-                    error_queue,
-                )
-            )
-            
             process_saving_video_segments.start()
-            process_segment_caption.start()
             process_saving_video_segments.join()
-            process_segment_caption.join()
             
-            # if raise error in this two, stop the processing
+            # if raise error, stop the processing
             while not error_queue.empty():
                 error_message = error_queue.get()
                 with open('error_log_videorag.txt', 'a', encoding='utf-8') as log_file:
@@ -263,7 +246,6 @@ class VideoRAG:
                 segment_index2name,
                 segment_times_info,
                 transcripts,
-                captions,
             )
             manager.shutdown()
             loop.run_until_complete(self.video_segments.upsert(
