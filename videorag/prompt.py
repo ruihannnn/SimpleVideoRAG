@@ -231,37 +231,6 @@ Output:
 
 
 
-PROMPTS[
-    "query_rewrite_for_visual_retrieval"
-] = """-Goal-
-Given a question that may include scene-related information, generate a declarative sentence to serve as a query for retrieving relevant video segments.
-
-######################
--Examples-
-######################
-
-Question: Which animal does the protagonist encounter in the forest scene?
-################
-Output:
-The protagonist encounters an animal in the forest.
-
-Question: In the movie, what color is the car that chases the main character through the city?
-################
-Output:
-A city chase scene where the main character is pursued by a car.
-
-Question: What is the weather like during the opening scene of the film?\n(A) Sunny\n(B) Rainy\n(C) Snowy\n(D) Windy
-################
-Output:
-The opening scene of the film featuring specific weather conditions. (Maybe Sunny, Rainy, Snowy or Windy)
-
-#############################
--Real Data-
-######################
-Question: {input_text}
-######################
-Output:
-"""
 
 
 

@@ -231,28 +231,6 @@ def get_chunks(new_videos, chunk_func=chunking_by_video_segments, **chunk_func_p
     return inserting_chunks
 
 
-async def _refine_visual_retrieval_query(
-    query,
-    query_param: QueryParam,
-    global_config: dict,
-):
-    """为视觉检索改写用户查询。
-
-    使用廉价模型对查询进行改写或扩展，使视觉检索（向量检索）更易命中相关片段。
-
-    Args:
-        query: 原始用户查询。
-        query_param: 控制检索行为的查询参数。
-        global_config: 全局配置，包含各类 LLM 调用函数。
-
-    Returns:
-        str: 更适合视觉检索的改写查询。
-    """
-    use_llm_func: callable = global_config["llm"]["cheap_model_func"]
-    query_rewrite_prompt = PROMPTS["query_rewrite_for_visual_retrieval"]
-    query_rewrite_prompt = query_rewrite_prompt.format(input_text=query)
-    final_result = await use_llm_func(query_rewrite_prompt)
-    return final_result
 
 async def _extract_keywords_query(
     query,
@@ -329,12 +307,7 @@ async def videorag_query(
     retreived_chunk_context = section
     
     # visual retrieval
-    query_for_visual_retrieval = await _refine_visual_retrieval_query(
-        query,
-        query_param,
-        global_config,
-    )
-    segment_results = await video_segment_feature_vdb.query(query_for_visual_retrieval)
+    segment_results = await video_segment_feature_vdb.query(query)
     visual_retrieved_segments = {n['__id__'] for n in segment_results} if len(segment_results) else set()
     
     # caption
@@ -346,7 +319,7 @@ async def videorag_query(
             eval(x.split('_')[-1]) # index
         )
     )
-    print(query_for_visual_retrieval)
+    print(query)
     print(f"Retrieved Visual Segments {visual_retrieved_segments}")
     
     already_processed = 0
@@ -484,12 +457,7 @@ async def videorag_query_multiple_choice(
         retreived_chunk_context = "No Content"
         
     # visual retrieval
-    query_for_visual_retrieval = await _refine_visual_retrieval_query(
-        query,
-        query_param,
-        global_config,
-    )
-    segment_results = await video_segment_feature_vdb.query(query_for_visual_retrieval)
+    segment_results = await video_segment_feature_vdb.query(query)
     visual_retrieved_segments = {n['__id__'] for n in segment_results} if len(segment_results) else set()
     
     # caption
@@ -501,7 +469,7 @@ async def videorag_query_multiple_choice(
             eval(x.split('_')[-1]) # index
         )
     )
-    print(query_for_visual_retrieval)
+    print(query)
     print(f"Retrieved Visual Segments {visual_retrieved_segments}")
     
     already_processed = 0
