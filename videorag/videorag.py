@@ -90,15 +90,10 @@ class VideoRAG:
     chunk_overlap_token_size: int = 50
     tiktoken_model_name: str = "gpt-4o"
 
-    # entity extraction (removed)
-    entity_extract_max_gleaning: int = 0
-    entity_summary_to_max_tokens: int = 0
 
     # Change to your LLM provider
     llm: LLMConfig = field(default_factory=openai_config)
     
-    # entity extraction disabled
-    entity_extraction_func: callable = None
     
     # storage
     key_string_value_json_storage_cls: Type[BaseKVStorage] = JsonKVStorage
@@ -151,15 +146,11 @@ class VideoRAG:
             else None
         )
 
-        # KG disabled
-        self.chunk_entity_relation_graph = None
 
         self.embedding_func = limit_async_func_call(self.llm.embedding_func_max_async)(wrap_embedding_func_with_attrs(
                 embedding_dim = self.llm.embedding_dim,
                 max_token_size = self.llm.embedding_max_token_size,
                 model_name = self.llm.embedding_model_name)(self.llm.embedding_func))
-        # Entities VDB disabled
-        self.entities_vdb = None
         self.chunks_vdb = (
             self.vector_db_storage_cls(
                 namespace="chunks",
@@ -329,22 +320,6 @@ class VideoRAG:
                 logger.info("Insert chunks for naive RAG")
                 await self.chunks_vdb.upsert(inserting_chunks)
 
-            # TODO: no incremental update for communities now, so just drop all
-            # await self.community_reports.drop()
-
-            # ---------- entity extraction disabled when KG is off
-            if self.entity_extraction_func is not None:
-                logger.info("[Entity Extraction]...")
-                maybe_new_kg, _, _ = await self.entity_extraction_func(
-                    inserting_chunks,
-                    knowledge_graph_inst=self.chunk_entity_relation_graph,
-                    entity_vdb=self.entities_vdb,
-                    global_config=asdict(self),
-                )
-                if maybe_new_kg is None:
-                    logger.warning("No new entities found")
-                else:
-                    self.chunk_entity_relation_graph = maybe_new_kg
             # ---------- commit upsertings and indexing
             await self.text_chunks.upsert(inserting_chunks)
         finally:
