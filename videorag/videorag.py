@@ -62,11 +62,11 @@ class VideoRAG:
     threads_for_split: int = 10
     video_segment_length: int = 30 # seconds
     rough_num_frames_per_segment: int = 5 # frames
-    fine_num_frames_per_segment: int = 15 # frames
+    fine_num_frames_per_segment: int = 10 # frames
     video_output_format: str = "mp4"
     audio_output_format: str = "mp3"
     video_embedding_batch_num: int = 2
-    segment_retrieval_top_k: int = 4
+    segment_retrieval_top_k: int = 3
     video_embedding_dim: int = 1024
     
     # query
@@ -106,6 +106,10 @@ class VideoRAG:
     always_create_working_dir: bool = True
     addon_params: dict = field(default_factory=dict)
     convert_response_to_json_func: callable = convert_response_to_json
+
+    # caption model
+    caption_model: Optional[AutoModel] = None
+    caption_tokenizer: Optional[AutoTokenizer] = None
 
     def load_caption_model(self, debug=False):
         # caption model

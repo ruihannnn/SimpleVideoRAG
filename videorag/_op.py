@@ -20,7 +20,9 @@ from .base import (
 from .prompt import PROMPTS
 from ._videoutil import (
     retrieved_segment_caption,
+    encode_video,
 )
+from .vlm import build_vlm, VLMConfig
 
 def chunking_by_token_size(
     tokens_list: list[list[int]],
@@ -289,7 +291,7 @@ async def videorag_query(
     use_model_func = global_config["llm"]["best_model_func"]
     query = query
     
-    # naive chunks
+    # 召回ASR文本
     results = await chunks_vdb.query(query, top_k=query_param.top_k)
     if not len(results):
         return PROMPTS["fail_response"]
@@ -305,11 +307,10 @@ async def videorag_query(
     section = "-----New Chunk-----\n".join([c["content"] for c in maybe_trun_chunks])
     retreived_chunk_context = section
     
-    # visual retrieval
+    # 召回视频片段
     segment_results = await video_segment_feature_vdb.query(query)
     visual_retrieved_segments = {n['__id__'] for n in segment_results} if len(segment_results) else set()
     
-    # caption
     retrieved_segments = list(visual_retrieved_segments)
     retrieved_segments = sorted(
         retrieved_segments,
@@ -325,52 +326,88 @@ async def videorag_query(
     remain_segments = retrieved_segments
     print(f"Using all {len(remain_segments)} retrieved segments")
     
-    # visual retrieval
-    keywords_for_caption = await _extract_keywords_query(
-        query,
-        query_param,
-        global_config,
-    )
-    print(f"Keywords: {keywords_for_caption}")
-    caption_results = retrieved_segment_caption(
-        caption_model,
-        caption_tokenizer,
-        keywords_for_caption,
-        remain_segments,
-        video_path_db,
-        video_segments,
-        num_sampled_frames=global_config['fine_num_frames_per_segment']
-    )
+    use_vlm_reasoning = bool(global_config.get('addon_params', {}).get('use_vlm_reasoning', False))
+    caption_results = {}
+    # 原版的生成逻辑（生成caption）
+    if not use_vlm_reasoning:
+        keywords_for_caption = await _extract_keywords_query(
+            query,
+            query_param,
+            global_config,
+        )
+        print(f"Keywords: {keywords_for_caption}")
+        caption_results = retrieved_segment_caption(
+            caption_model,
+            caption_tokenizer,
+            keywords_for_caption,
+            remain_segments,
+            video_path_db,
+            video_segments,
+            num_sampled_frames=global_config['fine_num_frames_per_segment']
+        )
+        ## data table
+        text_units_section_list = [["video_name", "start_time", "end_time", "content"]]
+        for s_id in caption_results:
+            video_name = '_'.join(s_id.split('_')[:-1])
+            index = s_id.split('_')[-1]
+            start_time = eval(video_segments._data[video_name][index]["time"].split('-')[0])
+            end_time = eval(video_segments._data[video_name][index]["time"].split('-')[1])
+            start_time = f"{start_time // 3600}:{(start_time % 3600) // 60}:{start_time % 60}"
+            end_time = f"{end_time // 3600}:{(end_time % 3600) // 60}:{end_time % 60}"
+            text_units_section_list.append([video_name, start_time, end_time, caption_results[s_id]])
+        text_units_context = list_of_list_to_csv(text_units_section_list)
 
-    ## data table
-    text_units_section_list = [["video_name", "start_time", "end_time", "content"]]
-    for s_id in caption_results:
-        video_name = '_'.join(s_id.split('_')[:-1])
-        index = s_id.split('_')[-1]
-        start_time = eval(video_segments._data[video_name][index]["time"].split('-')[0])
-        end_time = eval(video_segments._data[video_name][index]["time"].split('-')[1])
-        start_time = f"{start_time // 3600}:{(start_time % 3600) // 60}:{start_time % 60}"
-        end_time = f"{end_time // 3600}:{(end_time % 3600) // 60}:{end_time % 60}"
-        text_units_section_list.append([video_name, start_time, end_time, caption_results[s_id]])
-    text_units_context = list_of_list_to_csv(text_units_section_list)
-
-    retreived_video_context = f"\n-----Retrieved Knowledge From Videos-----\n```csv\n{text_units_context}\n```\n"
-    
-    if query_param.wo_reference:
-        sys_prompt_temp = PROMPTS["videorag_response_wo_reference"]
-    else:
-        sys_prompt_temp = PROMPTS["videorag_response"]
+        retreived_video_context = f"\n-----Retrieved Knowledge From Videos-----\n```csv\n{text_units_context}\n```\n"
         
-    sys_prompt = sys_prompt_temp.format(
-        video_data=retreived_video_context,
-        chunk_data=retreived_chunk_context,
-        response_type=query_param.response_type
-    )
-    response = await use_model_func(
-        query,
-        system_prompt=sys_prompt,
-    )
-    return response
+        if query_param.wo_reference:
+            sys_prompt_temp = PROMPTS["videorag_response_wo_reference"]
+        else:
+            sys_prompt_temp = PROMPTS["videorag_response"]
+            
+        sys_prompt = sys_prompt_temp.format(
+            video_data=retreived_video_context,
+            chunk_data=retreived_chunk_context,
+            response_type=query_param.response_type
+        )
+        response = await use_model_func(
+            query,
+            system_prompt=sys_prompt,
+        )
+        return response
+    # vlm的生成逻辑
+    else:
+        # Build VLM from config
+        vlm_cfg = VLMConfig(global_config.get('addon_params', {}).get('vlm', {}))
+        vlm = build_vlm(vlm_cfg)
+        # Collect frames and ASR from all retrieved segments
+        import numpy as np
+        from moviepy.video.io.VideoFileClip import VideoFileClip
+
+        all_frames = []
+        for s_id in remain_segments:
+            video_name = '_'.join(s_id.split('_')[:-1])
+            index = s_id.split('_')[-1]
+            video_path = video_path_db._data[video_name]
+            timestamp = video_segments._data[video_name][index]["time"].split('-')
+            start, end = eval(timestamp[0]), eval(timestamp[1])
+            video = VideoFileClip(video_path)
+            frame_times = np.linspace(start, end, global_config['fine_num_frames_per_segment'], endpoint=False)
+            frames = encode_video(video, frame_times)
+            all_frames.extend(frames)
+
+        # Reuse global text retrieval result above as ASR block
+        asr_text_block = retreived_chunk_context if retreived_chunk_context else "No Content"
+
+        sys_prompt_temp = PROMPTS["videorag_vlm_response"]
+        prompt = sys_prompt_temp.format(
+            asr_data=asr_text_block,
+            query=query,
+            response_type=query_param.response_type,
+        )
+        response = await vlm.generate(prompt, images=all_frames)
+        return response
+
+    
 
 async def videorag_query_multiple_choice(
     query,

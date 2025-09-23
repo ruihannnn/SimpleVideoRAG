@@ -390,3 +390,31 @@ Key points:
 1. Ensure that the "Answer" reflects the correct label format.
 2. Structure the "Explanation" for clarity, using Markdown for any necessary formatting.
 """
+
+
+# New prompts for VLM reasoning path (use_vlm_reasoning=True)
+PROMPTS[
+    "videorag_vlm_response"
+] = """---Role---
+
+You are a helpful assistant responding to a query using both ASR transcripts and visual frames from retrieved video segments.
+
+---Goal---
+
+Generate a response of the target length and format that answers the user's question by leveraging the provided ASR transcripts and the visual evidence (frames). If you don't know the answer or if the provided information is insufficient, say so. Do not make anything up.
+
+---Target response length and format---
+
+{response_type}
+
+---ASR Transcripts From Retrieved Segments---
+
+{asr_data}
+
+---User Query---
+
+{query}
+
+---Notice---
+Use both the ASR and the visual frames to produce the best answer. Format the response in Markdown.
+"""

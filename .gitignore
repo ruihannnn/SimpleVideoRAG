@@ -19,3 +19,4 @@ videorag-workdir/
 quickstart*.sh
 !quickstart.sh
 sglang.sh
+examples/bailian_qwen_plus_demo.py
